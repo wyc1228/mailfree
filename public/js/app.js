@@ -148,6 +148,12 @@ function updateBatchUI() {
   if (countEl) countEl.textContent = `已选 ${count} 个`;
   const delBtn = bar.querySelector('.batch-delete-btn');
   if (delBtn) delBtn.disabled = count === 0;
+  // 同步全选 checkbox 状态
+  const selectAllCb = document.getElementById('batch-select-all');
+  if (selectAllCb && currentPageMailboxes.length > 0) {
+    const allSelected = currentPageMailboxes.every(m => getSelectedAddresses().includes(m.address));
+    selectAllCb.checked = allSelected;
+  }
 }
 
 function showBatchBar() {
@@ -169,6 +175,10 @@ function showBatchBar() {
     if (mbListParent) mbListParent.insertBefore(bar, els.mbList);
   }
   bar.style.display = 'flex';
+  // 重置全选 checkbox 状态
+  const selectAllCb = document.getElementById('batch-select-all');
+  if (selectAllCb) selectAllCb.checked = false;
+  updateBatchUI();
 }
 
 function hideBatchBar() {
