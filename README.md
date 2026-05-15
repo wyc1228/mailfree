@@ -164,8 +164,10 @@ FORWARD_RULES="" 或 "disabled" 或 "none"
 
 1. **邮件接收不到**：检查 Email Routing 配置、MX 记录、MAIL_DOMAIN 变量
 2. **数据库连接错误**：确认 D1 绑定名为 `TEMP_MAIL_DB`，检查 database_id
-3. **登录问题**：确认 ADMIN_PASSWORD 和 JWT_TOKEN 已设置，清除浏览器缓存
-4. **界面显示异常**：检查静态资源路径，查看浏览器控制台错误
+3. **登录问题**：确认 ADMIN_PASSWORD 和 JWT_TOKEN 已设置，清除浏览器缓存 （每次重新部署都会清空这个设置，记得补上）
+4. <img width="2526" height="931" alt="image" src="https://github.com/user-attachments/assets/e94fef57-66e2-4216-8027-31d728f05d11" />
+
+5. **界面显示异常**：检查静态资源路径，查看浏览器控制台错误
 </details>
 
 <details>
