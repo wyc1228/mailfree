@@ -13,6 +13,10 @@ let mbLastCount = 0;
 let mbSearchTerm = '';
 let isLoading = false;
 
+// 批量选择状态
+let batchMode = false;
+let selectedAddresses = new Set();
+
 /**
  * 渲染邮箱列表项
  * @param {object} mailbox - 邮箱数据
@@ -26,6 +30,20 @@ export function renderMailboxItem(mailbox, isActive = false) {
   const isPinned = m.is_pinned ? 'pinned' : '';
   const activeClass = isActive ? 'active' : '';
   const time = formatTs(m.created_at);
+  const checked = selectedAddresses.has(m.address) ? 'checked' : '';
+  
+  if (batchMode) {
+    return `
+    <div class="mailbox-item ${isPinned} ${activeClass} batch-mode">
+      <label class="batch-checkbox-label" onclick="event.stopPropagation()">
+        <input type="checkbox" class="batch-checkbox" data-address="${address}" ${checked} onchange="toggleBatchSelect('${address}', this.checked)" />
+      </label>
+      <div class="mailbox-content" onclick="selectMailbox('${address}')">
+        <span class="address">${displayAddress}</span>
+        <span class="time">${time}</span>
+      </div>
+    </div>`;
+  }
   
   return `
     <div class="mailbox-item ${isPinned} ${activeClass}" onclick="selectMailbox('${address}')">
@@ -189,6 +207,81 @@ export function filterBySearch(mailboxes, term) {
   return mailboxes.filter(m => (m.address || '').toLowerCase().includes(lowerTerm));
 }
 
+// ====== 批量选择功能 ======
+
+/**
+ * 进入批量选择模式
+ */
+export function enterBatchMode() {
+  batchMode = true;
+  selectedAddresses.clear();
+}
+
+/**
+ * 退出批量选择模式
+ */
+export function exitBatchMode() {
+  batchMode = false;
+  selectedAddresses.clear();
+}
+
+/**
+ * 是否处于批量选择模式
+ * @returns {boolean}
+ */
+export function isBatchMode() {
+  return batchMode;
+}
+
+/**
+ * 切换单个邮箱的选中状态
+ * @param {string} address - 邮箱地址
+ * @param {boolean} selected - 是否选中
+ */
+export function toggleBatchItem(address, selected) {
+  if (selected) {
+    selectedAddresses.add(address);
+  } else {
+    selectedAddresses.delete(address);
+  }
+}
+
+/**
+ * 全选当前页
+ * @param {Array} mailboxes - 当前页邮箱列表
+ */
+export function selectAllOnPage(mailboxes) {
+  for (const m of mailboxes) {
+    selectedAddresses.add(m.address);
+  }
+}
+
+/**
+ * 取消全选当前页
+ * @param {Array} mailboxes - 当前页邮箱列表
+ */
+export function deselectAllOnPage(mailboxes) {
+  for (const m of mailboxes) {
+    selectedAddresses.delete(m.address);
+  }
+}
+
+/**
+ * 获取已选中的邮箱地址列表
+ * @returns {Array<string>}
+ */
+export function getSelectedAddresses() {
+  return Array.from(selectedAddresses);
+}
+
+/**
+ * 获取已选中数量
+ * @returns {number}
+ */
+export function getSelectedCount() {
+  return selectedAddresses.size;
+}
+
 export default {
   renderMailboxItem,
   renderMailboxList,
@@ -205,5 +298,13 @@ export default {
   isLoadingMailboxes,
   setLastCount,
   getLastCount,
-  filterBySearch
+  filterBySearch,
+  enterBatchMode,
+  exitBatchMode,
+  isBatchMode,
+  toggleBatchItem,
+  selectAllOnPage,
+  deselectAllOnPage,
+  getSelectedAddresses,
+  getSelectedCount
 };

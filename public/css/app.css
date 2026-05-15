@@ -525,9 +525,10 @@ body::after{
 }
 
 /* 历史邮箱搜索框样式 */
-.sidebar-search{ margin: 6px 0 10px; }
+.sidebar-search{ margin: 6px 0 10px; display: flex; gap: 6px; align-items: center; }
 .sidebar-search-input{
   width: 100%;
+  flex: 1;
   height: 36px;
   padding: 8px 12px;
   border: 1px solid var(--border-glass);
@@ -537,6 +538,58 @@ body::after{
 }
 .sidebar-search-input::placeholder{ color: var(--muted2); }
 .sidebar-search-input:focus{ outline:none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.15); background: #fff; }
+
+/* 批量操作样式 */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--card-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.batch-bar .batch-count {
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.batch-bar .batch-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+.batch-bar .batch-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mailbox-item.batch-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mailbox-item.batch-mode .batch-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.batch-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+#batch-mode-btn {
+  flex-shrink: 0;
+  font-size: 14px;
+  padding: 4px 8px;
+}
 
 /* 更细、更透明的滚动条（Chromium/WebKit） */
 .sidebar::-webkit-scrollbar{ width: 8px; height: 8px; }

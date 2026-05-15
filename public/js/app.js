@@ -13,7 +13,7 @@ import { showConfirm } from './modules/app/confirm-dialog.js';
 import { startAutoRefresh, stopAutoRefresh, initVisibilityTracking } from './modules/app/auto-refresh.js';
 import { getCurrentMailbox, setCurrentMailbox, loadCurrentMailbox, clearCurrentMailbox, setCurrentMailboxInfo, getCurrentMailboxInfo } from './modules/app/mailbox-state.js';
 import { renderPager, sliceByPage, prevPage, nextPage, resetPager, setView, isSentViewActive, renderEmailItem, markViewLoaded, isFirstLoad } from './modules/app/email-list.js';
-import { renderMailboxList, renderMbPager, getCurrentPage, setCurrentPage, getPageSize, prevMbPage, nextMbPage, resetMbPage, setSearchTerm, getSearchTerm, setLoading, isLoadingMailboxes, setLastCount, getLastCount } from './modules/app/mailbox-list.js';
+import { renderMailboxList, renderMbPager, getCurrentPage, setCurrentPage, getPageSize, prevMbPage, nextMbPage, resetMbPage, setSearchTerm, getSearchTerm, setLoading, isLoadingMailboxes, setLastCount, getLastCount, enterBatchMode, exitBatchMode, isBatchMode, toggleBatchItem, selectAllOnPage, deselectAllOnPage, getSelectedAddresses, getSelectedCount } from './modules/app/mailbox-list.js';
 import { initSessionFromCache, validateSession, isGuest, isAdmin, applySessionUI, initGuestMode } from './modules/app/session.js';
 import { loadDomains, getStoredLength, saveLength, updateRangeProgress, getSelectedDomainIndex, populateDomains, STORAGE_KEYS } from './modules/app/domains.js';
 import { initCompose, showSentEmailDetail } from './modules/app/compose.js';
@@ -116,6 +116,7 @@ async function loadMailboxes(opts = {}) {
     const search = getSearchTerm(); if (search) url += `&q=${encodeURIComponent(search)}`;
     const r = await api(url); const data = await r.json();
     const list = Array.isArray(data) ? data : (data.list || []); const total = data.total || list.length;
+    currentPageMailboxes = list; // 保存当前页数据用于全选
     setLastCount(total); renderMailboxList(list, els.mbList); renderMbPager(els, total);
     try { const q = document.getElementById('quota'); if (q) q.textContent = `${total} 邮箱`; } catch(_) {}
   } catch(_) {}
@@ -128,12 +129,107 @@ function updateMailboxInfoUI(info) { if (!info) return; if (els.favoriteIcon && 
 window.selectMailbox = (addr) => selectMailboxAddress(addr, els, api, refresh, autoRefreshCallback, updateMailboxInfoUI);
 window.togglePin = (e, addr) => toggleMailboxPin(e, addr, api, showToast, loadMailboxes);
 window.deleteMailbox = (e, addr) => deleteMailboxAddress(e, addr, els, api, showToast, showConfirm, loadMailboxes);
+window.toggleBatchSelect = (addr, checked) => { toggleBatchItem(addr, checked); updateBatchUI(); };
 window.showEmail = (id) => showEmailDetail(id, els, api, showToast);
 window.showSentEmail = async (id) => { try { const r = await api(`/api/sent/${id}`); showSentEmailDetail(await r.json(), els); } catch(e) { showToast(e.message || '加载失败', 'error'); }};
 window.deleteEmail = (id) => deleteEmailById(id, api, showToast, showConfirm, refresh);
 window.deleteSent = (id) => deleteSentById(id, api, showToast, showConfirm, refresh);
 window.copyFromList = (e, id) => copyFromEmailList(e, id, api, showToast);
 window.refreshEmails = refresh;
+
+// ====== 批量删除功能 ======
+let currentPageMailboxes = []; // 保存当前页邮箱数据用于全选
+
+function updateBatchUI() {
+  const bar = document.getElementById('batch-bar');
+  if (!bar) return;
+  const count = getSelectedCount();
+  const countEl = bar.querySelector('.batch-count');
+  if (countEl) countEl.textContent = `已选 ${count} 个`;
+  const delBtn = bar.querySelector('.batch-delete-btn');
+  if (delBtn) delBtn.disabled = count === 0;
+}
+
+function showBatchBar() {
+  let bar = document.getElementById('batch-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'batch-bar';
+    bar.className = 'batch-bar';
+    bar.innerHTML = `
+      <label class="batch-select-all-label">
+        <input type="checkbox" id="batch-select-all" onchange="toggleSelectAll(this.checked)" /> 全选
+      </label>
+      <span class="batch-count">已选 0 个</span>
+      <button class="btn btn-sm btn-danger batch-delete-btn" disabled onclick="batchDeleteSelected()">🗑️ 删除</button>
+      <button class="btn btn-sm btn-ghost" onclick="exitBatchModeUI()">取消</button>
+    `;
+    // 插入到邮箱列表容器之前
+    const mbListParent = els.mbList?.parentElement;
+    if (mbListParent) mbListParent.insertBefore(bar, els.mbList);
+  }
+  bar.style.display = 'flex';
+}
+
+function hideBatchBar() {
+  const bar = document.getElementById('batch-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+window.enterBatchModeUI = () => {
+  enterBatchMode();
+  showBatchBar();
+  loadMailboxes({ forceFresh: true });
+};
+
+window.exitBatchModeUI = () => {
+  exitBatchMode();
+  hideBatchBar();
+  loadMailboxes({ forceFresh: true });
+};
+
+window.toggleSelectAll = (checked) => {
+  if (checked) {
+    selectAllOnPage(currentPageMailboxes);
+  } else {
+    deselectAllOnPage(currentPageMailboxes);
+  }
+  // 更新所有 checkbox
+  document.querySelectorAll('.batch-checkbox').forEach(cb => { cb.checked = checked; });
+  updateBatchUI();
+};
+
+window.batchDeleteSelected = async () => {
+  const addresses = getSelectedAddresses();
+  if (addresses.length === 0) { showToast('请先选择要删除的邮箱', 'warn'); return; }
+  const confirmed = await showConfirm(`确定批量删除 ${addresses.length} 个邮箱？所有相关邮件将被清空，此操作不可恢复。`);
+  if (!confirmed) return;
+  try {
+    const r = await api('/api/mailboxes/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    showToast(`批量删除完成：成功 ${data.success_count} 个，失败 ${data.fail_count} 个`, data.fail_count > 0 ? 'warn' : 'success');
+    // 如果当前选中的邮箱被删除了，清除状态
+    const current = getCurrentMailbox();
+    if (current && addresses.includes(current)) {
+      clearCurrentMailbox();
+      if (els.email) els.email.textContent = '点击生成邮箱';
+      els.email?.classList.remove('has-email');
+      if (els.emailActions) els.emailActions.style.display = 'none';
+      if (els.list) els.list.innerHTML = '';
+      stopAutoRefresh();
+    }
+    exitBatchMode();
+    hideBatchBar();
+    await loadMailboxes({ forceFresh: true });
+  } catch(e) {
+    showToast(e.message || '批量删除失败', 'error');
+  }
+};
 
 // 事件绑定
 if (els.gen) els.gen.onclick = () => generateMailbox(els, lenRange, domainSelect, api, showToast, refresh, loadMailboxes, autoRefreshCallback, updateMailboxInfoUI);

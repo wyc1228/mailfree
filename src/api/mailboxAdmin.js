@@ -64,6 +64,87 @@ export async function handleMailboxAdminApi(request, db, url, path, options) {
     }
   }
 
+  // 批量删除邮箱
+  if (path === '/api/mailboxes/batch-delete' && request.method === 'POST') {
+    if (isMock) return errorResponse('演示模式不可删除', 403);
+    if (!isStrictAdmin(request, options)) {
+      // 非严格管理员也可以批量删除自己的邮箱
+      const payload = getJwtPayload(request, options);
+      if (!payload || !payload.userId) return errorResponse('Forbidden', 403);
+    }
+    try {
+      const body = await request.json();
+      const addresses = body.addresses || [];
+
+      if (!Array.isArray(addresses) || addresses.length === 0) {
+        return errorResponse('缺少 addresses 参数或地址列表为空', 400);
+      }
+
+      if (addresses.length > 100) {
+        return errorResponse('单次最多删除100个邮箱', 400);
+      }
+
+      const payload = getJwtPayload(request, options);
+      const strict = isStrictAdmin(request, options);
+      let successCount = 0;
+      let failCount = 0;
+      const results = [];
+
+      for (const addr of addresses) {
+        const normalized = String(addr || '').trim().toLowerCase();
+        if (!normalized) {
+          failCount++;
+          results.push({ address: addr, success: false, error: '地址为空' });
+          continue;
+        }
+
+        try {
+          const mailboxId = await getMailboxIdByAddress(db, normalized);
+          if (!mailboxId) {
+            failCount++;
+            results.push({ address: normalized, success: false, error: '邮箱不存在' });
+            continue;
+          }
+
+          // 非严格管理员需要验证所有权
+          if (!strict) {
+            const own = await db.prepare('SELECT 1 FROM user_mailboxes WHERE user_id = ? AND mailbox_id = ? LIMIT 1')
+              .bind(Number(payload.userId), mailboxId).all();
+            if (!own?.results?.length) {
+              failCount++;
+              results.push({ address: normalized, success: false, error: '无权限' });
+              continue;
+            }
+          }
+
+          // 删除邮件和邮箱
+          await db.prepare('DELETE FROM messages WHERE mailbox_id = ?').bind(mailboxId).run();
+          await db.prepare('DELETE FROM user_mailboxes WHERE mailbox_id = ?').bind(mailboxId).run();
+          await db.prepare('DELETE FROM mailboxes WHERE id = ?').bind(mailboxId).run();
+
+          invalidateMailboxCache(normalized);
+          successCount++;
+          results.push({ address: normalized, success: true });
+        } catch (e) {
+          failCount++;
+          results.push({ address: normalized, success: false, error: e.message || '删除失败' });
+        }
+      }
+
+      invalidateSystemStatCache('total_mailboxes');
+
+      return Response.json({
+        success: true,
+        success_count: successCount,
+        fail_count: failCount,
+        total: addresses.length,
+        results
+      });
+    } catch (e) {
+      return errorResponse('批量删除失败: ' + e.message, 500);
+    }
+  }
+
   // 重置邮箱密码
   if (path === '/api/mailboxes/reset-password' && request.method === 'POST') {
     if (isMock) return Response.json({ success: true, mock: true });
