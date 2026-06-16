@@ -4,6 +4,9 @@
 
 一个基于 Cloudflare Workers + D1 + R2 构建的**开源临时邮箱服务**，支持邮件接收、发送、转发、用户管理等完整功能。
 
+原项目地:https://github.com/idinging/freemail
+移除R2数据库项目地址:https://github.com/Livonz/freemail-d1
+
 **当前版本：V4.8** - 新增单个邮件转发和收藏功能
 
 `转发的地址需要在cloudflare Email Addresses中验证`
